@@ -269,6 +269,12 @@ def test_server_error():
     errdat = result['error']['data']
     assert errdat['details'] == 'whoops'
     assert errdat['method'] == 'broken_func'
+    assert 'traceback' in errdat
+    assert isinstance(errdat['traceback'], str)
+    traceback_file = open('test/test_server_error_traceback.txt', 'r')
+    traceback_text = traceback_file.read()
+    traceback_file.close()
+    assert errdat['traceback'] == traceback_text
 
 
 def test_params_must_be_missing():

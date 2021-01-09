@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/Users/erikpearson/work/kbase/sprints/2020Q4/jsonrpcbase/jsonrpcbase/main.py", line 213, in _call_single
+    result = method(params, metadata)
+  File "/Users/erikpearson/work/kbase/sprints/2020Q4/jsonrpcbase/test/test_jsonrpcbase.py", line 54, in broken_func
+    raise e
+TypeError
