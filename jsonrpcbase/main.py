@@ -15,6 +15,7 @@ from typing import Callable, Optional, List, Union
 import jsonrpcbase.exceptions as exceptions
 import jsonrpcbase.types as types
 import jsonrpcbase.utils as utils
+import traceback
 
 # Reference: https://www.jsonrpc.org/specification
 REQUEST_SCHEMA = {
@@ -180,6 +181,7 @@ class JSONRPCService(object):
                 'details': err.message,
             }
             return self._err_response(-32600, req_data, err_data=data, always_respond=True)
+
         # Handle unknown method error
         if req_data['method'] not in self.method_data:
             # Missing method
@@ -189,6 +191,7 @@ class JSONRPCService(object):
         method = self.method_data[req_data['method']].method
         params = req_data.get('params')
         (params_schema, result_schema) = utils.get_method_schemas(self.schema, req_data['method'])
+
         # Validate the parameters with the json-schema, if present
         if (req_data['method'] in self.schema['definitions']['methods']
                 and params_schema is None
@@ -205,12 +208,19 @@ class JSONRPCService(object):
                 # Invalid params error response
                 err_data = {'details': err.message, 'path': list(err.path)}
                 return self._err_response(-32602, req_data, err_data)
+
         try:
             result = method(params, metadata)
         except Exception as err:
             # Exception was raised inside the method.
             log.exception(f"Method {req_data['method']} threw an exception: {err}")
-            err_data = {'method': req_data['method']}
+            err_data = {
+                'method': req_data['method'],
+                # note keeping the usage of traceback, which carries the
+                # meaning of Pythons idiosyncratic reverse stacktrace.
+                # Most other languages should use stacktrace
+                'traceback': traceback.format_exc(limit=1000)
+            }
             if hasattr(err, 'message'):
                 err_data['details'] = err.message
             code = -32000  # Server error
@@ -223,13 +233,17 @@ class JSONRPCService(object):
                     )
                     raise exceptions.InvalidServerErrorCode(msg)
             return self._err_response(code, req_data, err_data)
+
         # Validate the result in development mode, if a result schema was supplied
         if self.development and result_schema:
             result_schema['definitions'] = self.schema['definitions']
             # Raises jsonschema.ValidationError
             jsonschema.validate(result, result_schema)
         _id = utils.response_id(req_data)
+
         if type(_id) in (str, int):
+            # TODO: Add back 1.1
+            # (and 1.0, but we don' need it) support!
             # Return the result in JSON-RPC 2.0 response format
             return {
                 'id': _id,
