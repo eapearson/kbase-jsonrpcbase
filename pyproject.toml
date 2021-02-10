@@ -1,9 +1,9 @@
 [tool.poetry]
-name = "kbase_jsonrpcbase"
+name = "kbase_jsonrpc11base"
 version = "0.3.0-alpha6"
-description = "Simple JSON-RPC service without transport layer"
+description = "Simple JSON-RPC 1.1 service without transport layer"
 authors = []
-license = "MIT"
+license = "SEE LICENSE IN LICENSE.md"
 readme = "README.md"
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -11,11 +11,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Microsoft :: Windows",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8"
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3.7"
 ]
-homepage = "https://github.com/kbaseIncubator/jsonrpcbase"
+homepage = "https://github.com/kbaseIncubator/kbase-jsnorpc11base"
 packages = [{ include = "jsonrpcbase" }]
 
 [tool.poetry.dependencies]

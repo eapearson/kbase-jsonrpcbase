@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "title": "Test service schema",
+  "definitions": {
+    "methods": {
+      "subtract": {
+        "params": {
+          "type": "array",
+          "minLength": 2,
+          "maxLength": 2,
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "kwargs_subtract": {
+        "params": {
+          "type": "object",
+          "required": [
+            "a",
+            "b"
+          ],
+          "properties": {
+            "a": {
+              "type": "integer"
+            },
+            "b": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "square": {
+        "params": {
+          "type": "array",
+          "minLength": 1,
+          "maxLength": 1,
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "notification": {
+        "params": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "broken_func": {},
+      "posv": {
+        "params": {
+          "$ref": "#/definitions/test_array"
+        }
+      },
+      "keyv": {
+        "params": {
+          "$ref": "#/definitions/test_object"
+        }
+      },
+      "echo": {
+        "params": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "integer"
+        }
+      }
+    },
+    "test_object": {
+      "type": "object",
+      "required": [
+        "a",
+        "c"
+      ],
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "boolean"
+        },
+        "c": {
+          "type": "number"
+        }
+      }
+    },
+    "test_array": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    }
+  }
+}

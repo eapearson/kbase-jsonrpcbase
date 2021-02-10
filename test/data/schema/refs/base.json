@@ -1,0 +1,44 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "title": "Test service schema",
+    "definitions": {
+        "test_object": {
+            "type": "object",
+            "required": [
+                "a",
+                "c"
+            ],
+            "properties": {
+                "a": {
+                    "type": "integer"
+                },
+                "b": {
+                    "type": "boolean"
+                },
+                "c": {
+                    "type": "number"
+                }
+            }
+        },
+        "test_array": {
+            "type": "array",
+            "items": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "integer"
+                },
+                {
+                    "type": "number"
+                },
+                {
+                    "type": "boolean"
+                },
+                {
+                    "type": "boolean"
+                }
+            ]
+        }
+    }
+}

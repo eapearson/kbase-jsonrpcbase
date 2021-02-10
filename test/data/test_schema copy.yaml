@@ -22,7 +22,7 @@ definitions:
         minLength: 1
         maxLength: 1
         items: {type: integer}
-    noop:
+    notification:
       params: {type: [array, object]}
     broken_func: {}
     posv:

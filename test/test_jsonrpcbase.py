@@ -3,203 +3,194 @@ jsonrpcbase tests
 """
 import json
 import jsonrpcbase
-import jsonschema
 import pytest
-import yaml
+import os
 
-import jsonrpcbase.exceptions as exceptions
 
-_SCHEMA_PATH = 'test/test_schema.yaml'
-_SERVICE_INFO_PATH = 'test/service.json'
-s = jsonrpcbase.JSONRPCService(
-    info=_SERVICE_INFO_PATH,
-    schema=_SCHEMA_PATH,
-    development=True
+SCHEMA_DIR = os.path.join(os.path.dirname(__file__), 'data/schema')
+
+print('schema dir', SCHEMA_DIR)
+
+
+service_description = jsonrpcbase.service_description.ServiceDescription(
+    'Test Service',
+    'https://github.com/kbase/kbase-jsonrpc11base/test',
+    summary='An test JSON-RPC 1.1 service',
+    version='1.0'
+)
+
+# Our service instance
+service = jsonrpcbase.JSONRPCService(
+    description=service_description,
+    schema_dir=SCHEMA_DIR,
+    validate_result=False
 )
 
 
-def subtract(params, meta):
+# Add testing methods go the service.
+# Note that each method needs param schema in data/schema
+def subtract(params, options):
     return params[0] - params[1]
 
 
-def kwargs_subtract(params, meta):
+def kwargs_subtract(params, options):
     return params['a'] - params['b']
 
 
-def square(params, meta):
+def square(params, options):
     return params[0] * params[0]
 
 
-def hello(params, meta):
+def hello(options):
     return "Hello world!"
 
 
 class Hello():
-    def msg(self, params, meta):
+    def msg(self, options):
         return "Hello world!"
 
 
-def noop(params, meta):
+def notification(params, options):
     pass
 
 
-def return_meta(params, meta):
-    """Used to test metadata param"""
-    return meta
+def return_options(params, options):
+    """Used to test options param"""
+    return {
+        'options': options,
+        'params': params
+    }
 
 
-def broken_func(params, meta):
-    e = TypeError()
-    e.message = 'whoops'
-    raise e
+def return_options_no_params(options):
+    """Used to test options param without params"""
+    return options
 
 
-s.add(subtract)
-s.add(kwargs_subtract)
-s.add(square)
-s.add(hello)
-s.add(Hello().msg, name='hello_inst')
-s.add(noop)
-s.add(broken_func)
-s.add(return_meta)
+def broken_func(options):
+    raise TypeError('whoops')
 
 
-def test_multiple_args():
+def no_validation(options):
+    "This method should have no validation defined"
+    return "no validation"
+
+
+service.add(subtract)
+service.add(kwargs_subtract)
+service.add(square)
+service.add(hello)
+service.add(Hello().msg, name='hello_inst')
+service.add(notification)
+service.add(broken_func)
+service.add(return_options)
+service.add(return_options_no_params)
+service.add(no_validation)
+
+
+# -------------------------------
+# Ensure acceptable forms all work
+# Happy path testing
+# Note id omitted from all requests, to
+# keep them simpler
+# -------------------------------
+
+
+# Test direct usage of call which deals with the
+# actual payload, a JSON string.
+#
+# In most cases we test using call_py, which consumes the
+# parsed request.
+
+# Test all forms of params.
+# Params may be any valid JSON, so we have a method to
+# handle each one!
+def test_array_param():
     """
     Test valid jsonrpc multiple argument calls.
     """
-    res_str = s.call('{"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": "1"}')
+    res_str = service.call(
+        '{"version": "1.1", "method": "subtract", "params": [42, 23]}')
     result = json.loads(res_str)
-    assert result['jsonrpc'] == "2.0"
+    assert result['version'] == "1.1"
     assert result['result'] == 19
-    assert result['id'] == "1"
 
 
-def test_kwargs():
+def test_object_param():
     """
-    Test valid jsonrpc keyword argument calls.
+    Using an object as a parameter.
     """
-    result = s.call_py({
-        'jsonrpc': "2.0",
+    result = service.call_py({
+        'version': "1.1",
         'method': 'kwargs_subtract',
-        'params': {'a': 42, 'b': 23},
-        'id': "1"
+        'params': {'a': 42, 'b': 23}
     })
-    assert result['jsonrpc'] == "2.0"
+    assert result['version'] == "1.1"
     assert result['result'] == 19
-    assert result['id'] == "1"
-
-
-def test_single_arg():
-    """
-    Test valid jsonrpc single argument calls.
-    """
-    result = s.call_py({
-        "jsonrpc": "2.0",
-        "method": "square",
-        "params": [2],
-        "id": "1"
-    })
-    assert result['jsonrpc'] == "2.0"
-    assert result['result'] == 4
-    assert result['id'] == "1"
 
 
 def test_no_args():
     """
     Test valid jsonrpc no argument calls.
     """
-    result = s.call_py({
-        "jsonrpc": "2.0",
+    result = service.call_py({
+        "version": "1.1",
+        "method": "hello"
+    })
+    assert result['version'] == "1.1"
+    assert result['result'] == "Hello world!"
+
+# -------------------------------
+# Break validation
+# Ensure that violations of validation schemas
+# behaves as expected
+# -------------------------------
+
+
+def test_no_args_but_provided():
+    """
+    When a method accepts no args, but they are provided,
+    should return error.
+    """
+    res = service.call_py({
+        "version": "1.1",
         "method": "hello",
-        "id": "1"
+        "params": ["hi"]
     })
-    assert result['jsonrpc'] == "2.0"
-    assert result['result'] == "Hello world!"
-    assert result['id'] == "1"
+    assert res['error']['message'] == 'Invalid params'
+    assert res['error']['code'] == -32602
+    assert res['error']['error']['message'] == ('Method has no parameters '
+                                                'specified, but arguments were provided')
 
 
-def test_metadata():
+def test_args_but_none_provided():
     """
-    Test that metadata is passed to the function handler
+    When a method expects args, but none are provided,
+    should return error.
     """
-    req = '{"jsonrpc": "2.0", "method": "return_meta", "id": 0}'
-    meta = {'x': 1}
-    res = s.call(req, meta)
-    result = json.loads(res)
-    assert result['result'] == meta
-
-
-def test_no_args_instance_method():
-    """
-    Test valid jsonrpc no argument calls on a class instance method.
-    """
-    result = s.call_py({
-        "jsonrpc": "2.0",
-        "method": "hello_inst",
-        "id": "1"
+    res = service.call_py({
+        "version": "1.1",
+        "method": "subtract"
     })
-    assert result['jsonrpc'] == "2.0"
-    assert result['result'] == "Hello world!"
-    assert result['id'] == "1"
+    assert res['error']['message'] == 'Invalid params'
+    assert res['error']['code'] == -32602
+    assert res['error']['error']['message'] == ('Method has parameters '
+                                                'specified, but none were provided')
 
 
-def test_empty_return():
+def test_no_validation():
     """
-    Test valid jsonrpc empty return calls.
+    When a method expects args, but none are provided,
+    should return error.
     """
-    result = s.call_py({
-        "jsonrpc": "2.0",
-        "method": "noop",
-        "params": [1, 2, 3, 4, 5],
-        "id": 3
+    res = service.call_py({
+        "version": "1.1",
+        "method": "no_validation"
     })
-    assert result['jsonrpc'] == "2.0"
-    assert result['result'] is None
-    assert result['id'] == 3
-
-
-def test_notification():
-    """
-    Test valid notification jsonrpc calls.
-    """
-    result = s.call('{"jsonrpc": "2.0", "method": "noop", "params": [1,2,3,4,5]}')
-    assert result is None
-
-
-def test_parse_error():
-    """
-    Test parse error triggering invalid json messages.
-    """
-    # rpc call with invalid JSON
-    req = """
-    {
-        "jsonrpc": "2.0",
-        "method": "subtract",
-        "params": "bar", "baz",
-        "id": 0,
-    }
-    """
-    res = s.call(req)
-    result = json.loads(res)
-    assert result['jsonrpc'] == "2.0"
-    assert result['error']['code'] == -32700
-    assert result['error']['data'] == {
-        'details': "Expecting ':' delimiter: line 5 column 31 (char 93)"
-    }
-    assert result['id'] is None
-
-
-def test_invalid_request_type():
-    """
-    Test error response for an invalid request type
-    """
-    res = s.call("null")
-    result = json.loads(res)
-    assert result['jsonrpc'] == "2.0"
-    assert result['error']['code'] == -32600
-    assert result['error']['message'] == 'Invalid Request'
-    assert result['id'] is None
+    assert res['error']['message'] == 'Invalid params'
+    assert res['error']['code'] == -32602
+    assert res['error']['error']['message'] == ('Validation is enabled, '
+                                                'but no parameter validator was provided')
 
 
 def test_invalid_method_type():
@@ -208,19 +199,133 @@ def test_invalid_method_type():
     """
     req = """
     {
-        "jsonrpc": "2.0",
+        "version": "1.1",
         "method": 1,
         "params": {}
     }
     """
-    res = s.call(req)
+    res = service.call(req)
     result = json.loads(res)
-    assert result['jsonrpc'] == "2.0"
+    assert result['version'] == "1.1"
     err = result['error']
     assert err['code'] == -32600
     assert err['message'] == 'Invalid Request'
-    assert err['data']['details'] == "1 is not of type 'string'"
-    assert result['id'] is None
+    assert err['error']['message'] == "1 is not of type 'string'"
+    assert 'id' not in result
+
+#
+# Result validation
+#
+
+# If a method call may return "null";
+# in other JSON-RPC versions there is a "notification", a call which
+# returns nothing (no response at all).
+# In 1.1 it is simply a method which the api can treat as
+# a notification, e.g. by returning null.
+
+
+def test_empty_return():
+    """
+    Test valid jsonrpc empty return calls.
+    """
+    result = service.call_py({
+        "version": "1.1",
+        "method": "notification",
+        "params": [1, 2, 3, 4, 5],
+    })
+    assert result['version'] == "1.1"
+    assert result['result'] is None
+
+
+#
+# Tests of API usage
+#
+
+def test_options():
+    """
+    Test that options is passed to the function handler
+    """
+    req = '{"version": "1.1", "method": "return_options", "params": [1]}'
+    options = {'x': 1}
+    res = service.call(req, options)
+    result = json.loads(res)
+    assert result['result']['options'] == options
+    assert result['result']['params'] == [1]
+
+
+def test_options_no_params():
+    """
+    Test that options is passed to the function handler
+    """
+    req = '{"version": "1.1", "method": "return_options_no_params"}'
+    options = {'x': 1}
+    res = service.call(req, options)
+    result = json.loads(res)
+    assert result['result'] == options
+
+
+def test_no_args_instance_method():
+    """
+    Test valid jsonrpc no argument calls on a class instance method.
+    """
+    result = service.call_py({
+        "version": "1.1",
+        "method": "hello_inst"
+    })
+    assert result['version'] == "1.1"
+    assert result['result'] == "Hello world!"
+
+
+# In 1.1, a "notification" is just a method call for which the
+# result is ignored; 1.1 and is typically null.
+# in 1.0 a notification required a null id, in 2.0 it requires an absent id;
+# in 1.1, we don't care.
+def test_notification():
+    """
+    Test valid notification jsonrpc calls.
+    """
+    result_str = service.call('{"version": "1.1", "method": "notification", "params": [1,2,3,4,5]}')
+    result = json.loads(result_str)
+    assert result['version'] == "1.1"
+    assert result['result'] is None
+
+
+# -------------------------------
+# Test overall payload compliance
+# Violate the JSON-RPC 1.1 rules!
+# -------------------------------
+
+def test_parse_error():
+    """
+    Test parse error triggering invalid json message.
+    Note it is sensitive to the error message generated
+    by json.load(s)
+    """
+    # The structure doesn't matter, so use simplest invalid
+    # JSON.
+    req = 'x'
+    res = service.call(req)
+    result = json.loads(res)
+    assert result['version'] == "1.1"
+    assert result['error']['code'] == -32700
+    assert result['error']['message'] == 'Parse error'
+    assert result['error']['error'] == {
+        'message': "Expecting value: line 1 column 1 (char 0)"
+    }
+
+
+def test_invalid_request_type():
+    """
+    Test error response for an invalid request structure
+    In this case, use the valid JSON null value.
+    """
+    res = service.call("null")
+    result = json.loads(res)
+    assert result['version'] == "1.1"
+    assert result['error']['name'] == 'JSONRPCError'
+    assert result['error']['code'] == -32600
+    assert result['error']['message'] == 'Invalid Request'
+    assert result['error']['error']
 
 
 def test_method_not_found_error():
@@ -228,16 +333,16 @@ def test_method_not_found_error():
     Test method not found error triggering jsonrpc calls.
     """
     # rpc call of non-existent method
-    result = s.call_py({
-        "jsonrpc": "2.0",
+    result = service.call_py({
+        "version": "1.1",
         "method": "foofoo",
         "id": 1
     })
-    meths = set(s.method_data.keys())
-    assert result['jsonrpc'] == "2.0"
+    methods = set(service.method_registry.keys())
+    assert result['version'] == "1.1"
     assert result['error']['code'] == -32601
     assert result['error']['message'] == 'Method not found'
-    assert set(result['error']['data']['available_methods']) == meths
+    assert set(result['error']['error']['available_methods']) == methods
     assert result['id'] == 1
 
 
@@ -245,11 +350,11 @@ def test_method_missing_error():
     """
     Test missing method error
     """
-    result = s.call_py({"jsonrpc": "2.0", "id": 1})
-    assert result['jsonrpc'] == "2.0"
+    result = service.call_py({"version": "1.1", "id": 1})
+    assert result['version'] == "1.1"
     assert result['error']['code'] == -32600
     assert result['error']['message'] == 'Invalid Request'
-    assert result['error']['data']['details'] == "'method' is a required property"
+    assert result['error']['error']['message'] == "'method' is a required property"
 
 
 def test_server_error():
@@ -257,63 +362,50 @@ def test_server_error():
     Test server error triggering jsonrpc calls.
     broken_func always raises
     """
-    result = s.call_py({
-        "jsonrpc": "2.0",
+    result = service.call_py({
+        "version": "1.1",
         "method": "broken_func",
         "id": "1"
     })
-    assert result['jsonrpc'] == "2.0"
+    assert result['version'] == "1.1"
     assert result['id'] == "1"
-    assert result['error']['code'] == -32000
-    assert result['error']['message'] == 'Server error'
-    errdat = result['error']['data']
-    assert errdat['details'] == 'whoops'
+    print('last')
+    print(result)
+    assert result['error']['code'] == -32002
+    assert result['error']['message'] == 'Exception calling method'
+    errdat = result['error']['error']
+    assert errdat['message'] == 'An unexpected exception was caught executing the method'
+    assert errdat['exception_message'] == 'whoops'
     assert errdat['method'] == 'broken_func'
     assert 'traceback' in errdat
-    assert isinstance(errdat['traceback'], str)
-    traceback_file = open('test/test_server_error_traceback.txt', 'r')
-    traceback_text = traceback_file.read()
-    traceback_file.close()
-    assert errdat['traceback'] == traceback_text
+    assert isinstance(errdat['traceback'], list)
+    # with open('test/data/test_server_error_traceback.regex', 'r') as fd:
+    #     traceback_regex = re.compile(fd.read(), re.MULTILINE)
+    # print(errdat['traceback'])
+    # assert traceback_regex.match(errdat['traceback'])
 
 
-def test_params_must_be_missing():
-    """
-    When the method is present in the schema, but no params schema is provided
-    beneath it, then we enforce that params must be missing.
-    """
-    res = s.call_py({
-        "jsonrpc": "2.0",
-        "id": 0,
-        "method": "broken_func",
-        "params": []
-    })
-    assert res['error']['message'] == 'Invalid params'
-    assert res['error']['code'] == -32602
-    assert res['error']['data']['details'] == 'Parameters not allowed'
-
-
+# Actually, any json vale is okay for a 1.1 id.
 def test_invalid_id():
     """
     Test the error response for an invalid `id` field
     """
-    res = s.call('{"jsonrpc": "2.0", "id": {}, "method": "noop", "params": {}}')
+    res = service.call('{"version": "1.1", "id": {}, "method": "notification", "params": {}}')
     result = json.loads(res)
-    assert result['error']['message'] == 'Invalid Request'
-    assert result['error']['code'] == -32600
-    assert result['error']['data']['details'] == "{} is not of type 'integer', 'string'"
-    assert 'result' not in result
-    assert result['id'] is None
+    assert result['version'] == '1.1'
+    assert result['id'] == {}
+    assert 'result' in result
+    # not testing characteristics of result
 
 
 def test_invalid_params():
     """
     Test the error response for an invalid `params` field
     """
-    res = s.call('{"jsonrpc": "2.0", "id": 0, "method": "noop", "params": "hi"}')
+    res = service.call('{"version": "1.1", "id": 0, "method": "notification", "params": "hi"}')
     result = json.loads(res)
     assert result['error']['message'] == 'Invalid Request'
-    assert result['error']['data']['details'] == "'hi' is not of type 'object'"
+    assert result['error']['error']['message'] == "'hi' is not of type 'object'"
     assert result['error']['code'] == -32600
     assert 'result' not in result
     assert result['id'] == 0
@@ -324,13 +416,12 @@ def test_invalid_version():
     Test error response for invalid jsonrpc version
     """
     # Use default
-    res = s.call('{"jsonrpc": "9999", "method": "noop", "params": {"kwarg": 5}}')
+    res = service.call('{"version": "9999", "method": "notification", "params": {"kwarg": 5}}')
     result = json.loads(res)
-    assert result['jsonrpc'] == "2.0"
+    assert result['version'] == "1.1"
     assert result['error']['code'] == -32600
     assert result['error']['message'] == 'Invalid Request'
-    assert result['error']['data']['details'] == "'2.0' was expected"
-    assert result['id'] is None
+    assert result['error']['error']['message'] == "'1.1' was expected"
 
 
 def test_version_response_parse_error():
@@ -338,12 +429,11 @@ def test_version_response_parse_error():
     Test the jsonrpc version in the response for a parse error
     """
     # Parse error
-    # Assume "2.0" version because version could not be read
-    res = s.call('{ "method": "echo", "params": "bar", "baz", "id": 1} ')
+    # Assume "1.1" version because version could not be read
+    res = service.call('{ "method": "echo", "params": "bar", "baz", "id": 1} ')
     result = json.loads(res)
-    assert result['jsonrpc'] == "2.0"
+    assert result['version'] == "1.1"
     assert result['error']['code'] == -32700
-    assert result['id'] is None
 
 
 def test_version_response_no_version():
@@ -351,133 +441,23 @@ def test_version_response_no_version():
     Test the jsonrpc version in the response when no version is supplied
     """
     # Use default
-    res = s.call('{"method": "noop", "params": {"kwarg": 5}, "id": 6}')
+    res = service.call('{"method": "notification", "params": {"kwarg": 5}, "id": 6}')
     result = json.loads(res)
     assert result['id'] == 6
-    assert result['jsonrpc'] == "2.0"
+    assert result['version'] == "1.1"
     assert result['error']['message'] == 'Invalid Request'
-    assert result['error']['data'] == {'details': "'jsonrpc' is a required property"}
-
-
-def test_batch():
-    """
-    Test valid jsonrpc batch calls, no notifications.
-    """
-    results = s.call_py([
-        {"jsonrpc": "2.0", "method": "square", "params": [4], "id": "1"},
-        {"jsonrpc": "2.0", "method": "subtract", "params": [12, 3], "id": "2"},
-        {"jsonrpc": "2.0", "method": "noop", "params": [], "id": "3"},
-    ])
-    assert len(results) == 3
-    for result in results:
-        assert result['jsonrpc'] == "2.0"
-        if result['id'] == "1":
-            assert result['result'] == 16
-        if result['id'] == "2":
-            assert result['result'] == 9
-        if result['id'] == "3":
-            assert result['result'] is None
-
-
-def test_notification_batch():
-    """
-    Test valid jsonrpc notification only batch calls.
-    """
-    result = s.call_py([
-        {"jsonrpc": "2.0", "method": "noop", "params": [1, 2, 4]},
-        {"jsonrpc": "2.0", "method": "noop", "params": [7]},
-    ])
-    assert result is None
-
-
-def test_batch_method_error_with_notification():
-    result = s.call_py([
-        {"jsonrpc": "2.0", "method": "broken_func"}
-    ])
-    assert result is None
-
-
-def test_batch_method_missing_with_notification():
-    """Unknown method in a batch call"""
-    result = s.call_py([
-        {"jsonrpc": "2.0", "method": "methodnotthere", "params": [7]},
-    ])
-    assert result is None
-
-
-def test_empty_batch():
-    """
-    Test invalid empty jsonrpc batch call
-    """
-    result = s.call_py([])
-    assert result['jsonrpc'] == "2.0"
-    assert result['error']['code'] == -32600
-    assert result['error']['message'] == 'Invalid Request'
-    assert result['error']['data']['details'] == 'Batch request array is empty'
-    assert result['id'] is None
-
-
-def test_parse_error_batch():
-    """
-    Test parse error triggering invalid batch calls.
-    """
-    req = '[{"jsonrpc": "2.0", "method": xyz, "id": 0}]'
-    res = s.call(req)
-    result = json.loads(res)
-    assert result['jsonrpc'] == "2.0"
-    assert result['error']['code'] == -32700
-    assert result['id'] is None
-
-
-def test_invalid_batch():
-    """
-    Test invalid jsonrpc batch calls.
-    Invalid request types.
-    """
-    results = s.call_py([1, 2, 3])
-    assert len(results) == 3
-    for result in results:
-        assert result['jsonrpc'] == "2.0"
-        assert result['error']['code'] == -32600
-        assert result['id'] is None
-
-
-def test_partially_valid_batch():
-    """
-    Test partially valid jsonrpc batch calls.
-    """
-    results = s.call_py([
-        {"jsonrpc": "2.0", "method": "square", "params": [2], "id": 1},
-        {"jsonrpc": "2.0", "method": "noop", "params": [7]},
-        {"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": "2"},
-        {"foo": "boo"},
-        {"jsonrpc": "2.0", "method": "foo.get", "params": {"name": "myself"}, "id": "5"},
-        {"jsonrpc": "2.0", "method": "broken_func", "id": "9"}
-    ])
-    assert len(results) == 5
-    for result in results:
-        assert result['jsonrpc'] == "2.0"
-        if result['id'] == "1":
-            assert result['result'] == 4
-        elif result['id'] == "2":
-            assert result['result'] == 19
-        elif result['id'] == "5":
-            assert result['error']['code'] == -32601
-        elif result['id'] == "9":
-            assert result['error']['code'] == -32000
-        elif result['id'] is None:
-            assert result['error']['code'] == -32600
+    assert result['error']['error']['message'] == "'version' is a required property"
 
 
 def test_alternate_name():
     """
     Test method calling with alternate name.
     """
-    def finnish_hello(params, meta):
+    def hi(meta):
         return "Hei maailma!"
-    s.add(finnish_hello, name="fihello")
-    result = s.call_py({"jsonrpc": "2.0", "method": "fihello", "id": "1"})
-    assert result['jsonrpc'] == "2.0"
+    service.add(hi, name="finnish_hello")
+    result = service.call_py({"version": "1.1", "method": "finnish_hello", "id": "1"})
+    assert result['version'] == "1.1"
     assert result['result'] == "Hei maailma!"
     assert result['id'] == "1"
 
@@ -486,14 +466,14 @@ def test_positional_validation():
     """
     Test validation of positional arguments with valid jsonrpc calls.
     """
-    s.add(noop, name='posv')
-    result = s.call_py({
-        "jsonrpc": "2.0",
+    service.add(notification, name='posv')
+    result = service.call_py({
+        "version": "1.1",
         "method": "posv",
         "params": ["foo", 5, 6.0, True, False],
         "id": "1"
     })
-    assert result['jsonrpc'] == "2.0"
+    assert result['version'] == "1.1"
     assert result['result'] is None
     assert result['id'] == "1"
 
@@ -502,32 +482,36 @@ def test_positional_validation_error():
     """
     Test error handling of validation of positional arguments with invalid jsonrpc calls.
     """
-    result = s.call_py({
-        "jsonrpc": "2.0",
-        "method": "posv",
-        "params": ["x", 1, 2.0, True, "x"],
+    result = service.call_py({
+        "version": "1.1",
         "id": "1",
+        "method": "posv",
+        "params": ["x", 1, 3.0, True, "x"],
     })
-    assert result['jsonrpc'] == "2.0"
-    assert result['error']['code'] == -32602
-    assert result['error']['message'] == 'Invalid params'
-    assert result['error']['data']['details'] == "'x' is not of type 'boolean'"
-    assert result['error']['data']['path'] == [4]
+    assert result['version'] == "1.1"
     assert result['id'] == "1"
+    assert result['error']['code'] == -32602
+    print('no message?')
+    print(result['error'])
+    assert result['error']['message'] == 'Invalid params'
+    assert result['error']['error']['message'] == "'x' is not of type 'boolean'"
+    assert result['error']['error']['path'] == 'items.4.type'
+    assert result['error']['error']['value'] == 'boolean'
 
 
 def test_keyword_validation():
     """
     Test validation of keyword arguments with valid jsonrpc calls.
     """
-    s.add(noop, name='keyv')
-    result = s.call_py({
-        "jsonrpc": "2.0",
+    service.add(notification, name='keyv')
+    result = service.call_py({
+        "version": "1.1",
         "method": "keyv",
         "params": {"a": 1, "b": False, "c": 6.0},
         "id": "1",
     })
-    assert result['jsonrpc'] == "2.0"
+    assert result['version'] == "1.1"
+    print('RESULT', result)
     assert result['result'] is None
     assert result['id'] == "1"
 
@@ -536,32 +520,33 @@ def test_required_keyword_validation_error():
     """
     Test error handling of validation of required keyword arguments with invalid jsonrpc calls.
     """
-    result = s.call_py({
-        "jsonrpc": "2.0",
+    result = service.call_py({
+        "version": "1.1",
         "method": "keyv",
         # Missing required property "c"
         "params": {"a": 1, "b": 6.0},
         "id": "1"
     })
-    assert result['jsonrpc'] == "2.0"
+    print(result)
+    assert result['version'] == "1.1"
     assert result['error']['code'] == -32602
     assert result['error']['message'] == 'Invalid params'
-    assert result['error']['data']['details'] == "'c' is a required property"
-    assert result['error']['data']['path'] == []
+    assert result['error']['error']['message'] == "'c' is a required property"
     assert result['id'] == "1"
 
 
-def test_result_schema_validation():
-    def echo(params, meta):
-        return params['x']
-    s.add(echo)
-    with pytest.raises(jsonschema.exceptions.ValidationError):
-        result = s.call_py({
-            "jsonrpc": "2.0",
-            "method": "echo",
-            "params": {"x": "hi"}
-        })
-        assert result['error']['message'] == "'x' is not of type integer"
+# TODO: hmm .... update
+# def test_result_schema_validation():
+#     def echo(params, meta):
+#         return params['x']
+#     service.add(echo)
+#     with pytest.raises(jsonschema.exceptions.ValidationError):
+#         result = service.call_py({
+#             "version": "1.1",
+#             "method": "echo",
+#             "params": {"x": "hi"}
+#         })
+#         assert result['error']['error']['message'] == "'x' is not of type integer"
 
 
 def test_duplicate_method_name_err():
@@ -569,111 +554,144 @@ def test_duplicate_method_name_err():
     Test the error raised when trying to add a pre-existing method name
     """
     with pytest.raises(jsonrpcbase.exceptions.DuplicateMethodName) as excinfo:
-        s.add(noop)
-    assert str(excinfo.value) == "Duplicate method name for JSON-RPC service: 'noop'"
+        service.add(notification)
+    assert str(excinfo.value) == "Method already registered under this name: 'notification'"
 
 
+# NOPE: Actually, the 2.0 spec (which we adopt for 1.1) states that the
+# user may use any code outside of the reserved range -32768 to -32000 (inclusive)
+# U
 def test_invalid_server_err_code():
     """Test the error when a user sets an invalid server error code"""
-    class InvalidServerCode(Exception):
-        jsonrpc_code = -100
+    class InvalidServerCode(jsonrpcbase.errors.APIError):
+        code = -32000
+        message = 'Invalid code!'
 
-    def invalid_server_code(params, meta):
+    def invalid_server_code(meta):
         raise InvalidServerCode
-    s.add(invalid_server_code)
-    with pytest.raises(jsonrpcbase.exceptions.InvalidServerErrorCode):
-        s.call_py({"method": "invalid_server_code", "jsonrpc": "2.0"})
 
+    service.add(invalid_server_code)
 
-def test_invalid_service_schema():
-    """
-    Test error classes raised when trying to initialize a service with an
-    invalid schema argument.
-    """
-    with pytest.raises(exceptions.InvalidFileType):
-        jsonrpcbase.JSONRPCService(schema='test/xyz.txt', info=_SERVICE_INFO_PATH)
+    result = service.call_py({"method": "invalid_server_code", "version": "1.1"})
 
+    assert result['version'] == "1.1"
+    assert result['error']['code'] == -32001
+    assert result['error']['message'] == 'Reserved Error Code'
+    assert result['error']['error']['bad_code'] == -32000
 
-def test_invalid_service_info():
-    """
-    Test error classes raised when trying to initialize a service with an
-    invalid schema argument.
-    """
-    with pytest.raises(jsonschema.exceptions.ValidationError):
-        jsonrpcbase.JSONRPCService(schema='test/test_schema.yaml', info={'x': 1})
+# TODO: notification with error does not throw error
+# def test_invalid_server_err_code():
+#     """Test the error when a user sets an invalid server error code"""
+#     class InvalidServerCode(jsonrpcbase.errors.APIError):
+#         code = -32000
+#         message = 'Invalid code!'
+
+#     def invalid_server_code(params, meta):
+#         raise InvalidServerCode
+
+#     service.add(invalid_server_code)
+#     # with pytest.raises(jsonrpcbase.errors.ServerError_ReservedErrorCode):
+#     #     service.call_py({"method": "invalid_server_code", "version": "1.1"})
+
+#     result = service.call_py({"method": "invalid_server_code", "version": "1.1"})
+#     assert result['version'] == "1.1"
+#     assert result['error']['code'] == -32001
+#     assert result['error']['message'] == 'Reserved Error Code'
+#     # assert result['error']['error']['message'] == "'x' is not of type 'boolean'"
+#     assert result['error']['error']['bad_code'] == -32000
+
+#
+# Cases covering the service description, available at "system.describe"
+#
 
 
 def test_service_discovery_ok():
     """
     Test valid service discovery response.
     """
-    res = s.call_py({
-        "jsonrpc": "2.0",
+    res = service.call_py({
+        "version": "1.1",
         "id": 0,
-        "method": "rpc.discover",
+        "method": "system.describe",
     })
-    with open(_SCHEMA_PATH) as fd:
-        service_schema = yaml.safe_load(fd)
-    with open(_SERVICE_INFO_PATH) as fd:
-        info = yaml.safe_load(fd)
-    assert res['jsonrpc'] == '2.0'
+    assert res['version'] == '1.1'
     assert res['id'] == 0
     # Add builtins for assertion
-    service_schema['definitions']['methods']['rpc.discover'] = {}
-    assert res['result']['schema'] == service_schema
-    assert res['result']['service_info'] == info
-
-
-def test_service_discovery_invalid_params():
-    """
-    Test valid service discovery response.
-    """
-    res = s.call_py({
-        "jsonrpc": "2.0",
-        "id": 0,
-        "method": "rpc.discover",
-        "params": ["x"],
-    })
-    assert res['jsonrpc'] == '2.0'
-    assert res['id'] == 0
-    assert 'result' not in res
+    # service_schema['definitions']['methods']['service.discover'] = {}
     print(res)
-    assert res['error']['message'] == 'Invalid params'
-    assert res['error']['code'] == -32602
-    assert res['error']['data']['details'] == 'Parameters not allowed'
+    assert res['result']['sdversion'] == '1.0'
+    assert res['result']['name'] == 'Test Service'
+    assert res['result']['id'] == 'https://github.com/kbase/kbase-jsonrpc11base/test'
 
 
-def test_service_info():
-    """Test valid load of service info"""
-    with open(_SERVICE_INFO_PATH) as fd:
-        info = yaml.safe_load(fd)
-    assert s.info == info
+# def test_invalid_service_schema():
+#     """
+#     Test error classes raised when trying to initialize a service with an
+#     invalid schema argument.
+#     """
+#     with pytest.raises(exceptions.InvalidFileType):
+#         jsonrpcbase.JSONRPCService(schema='test/xyz.txt', info=_SERVICE_INFO_PATH)
 
 
-def test_invalid_service_info_path():
-    """Test valid load of service info"""
-    with pytest.raises(exceptions.InvalidFileType):
-        jsonrpcbase.JSONRPCService(schema='test/test_schema.yaml', info='xyz.txt')
+# def test_invalid_service_info():
+#     """
+#     Test error classes raised when trying to initialize a service with an
+#     invalid schema argument.
+#     """
+#     with pytest.raises(jsonschema.exceptions.ValidationError):
+#         jsonrpcbase.JSONRPCService(schema='test/data/test_schema.yaml', info={'x': 1})
 
 
-def test_empty_schema():
-    """Test initialization of service with no schema"""
-    s = jsonrpcbase.JSONRPCService(info=_SERVICE_INFO_PATH)
-    assert s.schema['$schema'] == "http://json-schema.org/draft-07/schema#"
-    assert s.schema['definitions'] == {"methods": {"rpc.discover": {}}}
+# def test_service_discovery_invalid_params():
+#     """
+#     Test valid service discovery response.
+#     """
+#     res = service.call_py({
+#         "version": "1.1",
+#         "id": 0,
+#         "method": "service.discover",
+#         "params": ["x"],
+#     })
+#     assert res['version'] == '1.1'
+#     assert res['id'] == 0
+#     assert 'result' not in res
+#     print(res)
+#     assert res['error']['message'] == 'Invalid params'
+#     assert res['error']['code'] == -32602
+#     assert res['error']['error']['message'] == 'Parameters not allowed'
 
 
-def test_override_discover_method():
-    """Test the error case where the user tries to override rpc.discover."""
-    schema = {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "definitions": {
-            "methods": {
-                "rpc.discover": {
-                    "params": {"type": "null"}
-                }
-            }
-        }
-    }
-    with pytest.raises(exceptions.InvalidSchemaError):
-        jsonrpcbase.JSONRPCService(info=_SERVICE_INFO_PATH, schema=schema)
+# def test_service_description():
+#     """Test valid load of service info"""
+#     with open(_SERVICE_INFO_PATH) as fd:
+#         info = yaml.safe_load(fd)
+#     assert service.info == info
+
+
+# def test_invalid_service_info_path():
+#     """Test valid load of service info"""
+#     with pytest.raises(exceptions.InvalidFileType):
+#         jsonrpcbase.JSONRPCService(schema='test/data/test_schema.yaml', info='xyz.txt')
+
+
+# def test_empty_schema():
+#     """Test initialization of service with no schema"""
+#     s = jsonrpcbase.JSONRPCService(info=_SERVICE_INFO_PATH)
+#     assert service.schema['$schema'] == "http://json-schema.org/draft-07/schema#"
+#     assert service.schema['definitions'] == {"methods": {"service.discover": {}}}
+
+
+# def test_override_discover_method():
+#     """Test the error case where the user tries to override service.discover."""
+#     schema = {
+#         "$schema": "http://json-schema.org/draft-07/schema#",
+#         "definitions": {
+#             "methods": {
+#                 "service.discover": {
+#                     "params": {"type": "null"}
+#                 }
+#             }
+#         }
+#     }
+#     with pytest.raises(exceptions.InvalidSchemaError):
+#         jsonrpcbase.JSONRPCService(info=_SERVICE_INFO_PATH, schema_dir=SCHEMA_DIR)
