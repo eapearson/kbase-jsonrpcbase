@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "kbase-jsonrpc11base"
+name = "jsonrpc11base"
 version = "0.4.0-alpha7"
 description = "Simple JSON-RPC 1.1 service without transport layer"
 authors = []
