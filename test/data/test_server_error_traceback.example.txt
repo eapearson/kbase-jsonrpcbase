@@ -1,9 +1,9 @@
 Traceback (most recent call last):
-  File "/Users/erikpearson/work/kbase/sprints/2020Q4/kbase-jsonrpc11base/jsonrpcbase/main.py", line 314, in call_py
+  File "/Users/erikpearson/work/kbase/sprints/2020Q4/kbase-jsonrpc11base/jsonrpc11base/main.py", line 314, in call_py
     return handle_result(do_result(do_method()))
-  File "/Users/erikpearson/work/kbase/sprints/2020Q4/kbase-jsonrpc11base/jsonrpcbase/main.py", line 237, in do_method
+  File "/Users/erikpearson/work/kbase/sprints/2020Q4/kbase-jsonrpc11base/jsonrpc11base/main.py", line 237, in do_method
     return method(options)
-  File "/Users/erikpearson/work/kbase/sprints/2020Q4/kbase-jsonrpc11base/test/test_jsonrpcbase.py", line 54, in broken_func
+  File "/Users/erikpearson/work/kbase/sprints/2020Q4/kbase-jsonrpc11base/test/test_jsonrpc11base.py", line 54, in broken_func
     raise TypeError('whoops')
 TypeError: whoops
 

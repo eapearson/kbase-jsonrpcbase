@@ -1,5 +1,5 @@
-from jsonrpcbase import JSONRPCService, errors
-from jsonrpcbase.service_description import ServiceDescription
+from jsonrpc11base import JSONRPCService, errors
+from jsonrpc11base.service_description import ServiceDescription
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 

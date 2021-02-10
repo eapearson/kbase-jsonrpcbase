@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## 2021-01-08
-- Break off from upstream https://github.com/kbaseIncubator/kbase-jsonrpcbase
+- Break off from upstream https://github.com/kbaseIncubator/kbase-jsonrpc11base
 - Dedicating to JSON-RPC 1.1 (working draft), which is used by one of this packages 
   only remaining users - KBase (https://www.kbase.us)
 

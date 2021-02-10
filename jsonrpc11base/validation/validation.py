@@ -1,5 +1,5 @@
 from .schema import Schema, SchemaError
-from jsonrpcbase.errors import InvalidParamsError, ServerError_InvalidResult
+from jsonrpc11base.errors import InvalidParamsError, ServerError_InvalidResult
 
 
 class Validation(object):

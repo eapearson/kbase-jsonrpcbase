@@ -1,6 +1,6 @@
 # JSONRPCBase
 
-> NOTE: This is a fork of [level12/jsonrpcbase](https://github.com/level12/jsonrpcbase/) with changes maintained by KBase
+> NOTE: This is a fork of [level12/jsonrpc11base](https://github.com/level12/jsonrpc11base/) with changes maintained by KBase
 
 This  is a simple JSON-RPC 1.1 library without and agnostic to a transport layer.
 
@@ -25,10 +25,10 @@ protocol with this library to actually provide a working JSON-RPC service.
 Example usage:
 
 ```py
-import jsonrpc, APIError, CustomServerError  from kbase_jsonrpc11base
+import jsonrpc11, APIError, CustomServerError  from kbase_jsonrpc11base
 import HTTPServer, BaseHTTPRequestHandler from http.server
 
-service = jsonrpc.JSONRPCService()
+service = jsonrpc11.JSONRPCService()
 
 db = {}
 last_id = 0

@@ -1,8 +1,8 @@
 Traceback \(most recent call last\):
-  File "/.*/jsonrpcbase/main.py", line [\d]+, in call_py
+  File "/.*/jsonrpc11base/main.py", line [\d]+, in call_py
     return handle_result(do_result(do_method()))
-  File "/.*/jsonrpcbase/main.py", line [\d]+, in do_method
+  File "/.*/jsonrpc11base/main.py", line [\d]+, in do_method
     return method(options)
-  File "/.*/test/test_jsonrpcbase.py", line [\d]+, in broken_func
+  File "/.*/test/test_jsonrpc11base.py", line [\d]+, in broken_func
     raise TypeError\('whoops'\)
 TypeError: whoops

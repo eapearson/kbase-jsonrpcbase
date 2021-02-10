@@ -1,5 +1,5 @@
 from typing import Optional
-from jsonrpcbase.types import Identifier
+from jsonrpc11base.types import Identifier
 
 
 # ===============================================================================

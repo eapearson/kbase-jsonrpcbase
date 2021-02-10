@@ -6,22 +6,22 @@ See README.md for details
 Uses Google Style Python docstrings:
     https://github.com/google/styleguide/blob/gh-pages/pyguide.md#38-comments-and-docstrings
 """
-from jsonrpcbase.service_description import ServiceDescription
-import jsonrpcbase.validation.validation as validation
+from jsonrpc11base.service_description import ServiceDescription
+import jsonrpc11base.validation.validation as validation
 import json
 import os
 import logging
 
 from typing import Callable, Optional, Union, Dict
 
-import jsonrpcbase.exceptions as exceptions
+import jsonrpc11base.exceptions as exceptions
 import traceback
-from jsonrpcbase.validation.schema import Schema, SchemaError
-from jsonrpcbase.errors import (make_jsonrpc_error, make_jsonrpc_error_response,
-                                InvalidParamsError, JSONRPCError, APIError,
-                                ServerError_ReservedErrorCode, ServerError_InvalidResult)
-from jsonrpcbase.types import (MethodRequest, MethodResult)
-from jsonrpcbase.method import Method
+from jsonrpc11base.validation.schema import Schema, SchemaError
+from jsonrpc11base.errors import (make_jsonrpc_error, make_jsonrpc_error_response,
+                                  InvalidParamsError, JSONRPCError, APIError,
+                                  ServerError_ReservedErrorCode, ServerError_InvalidResult)
+from jsonrpc11base.types import (MethodRequest, MethodResult)
+from jsonrpc11base.method import Method
 
 log = logging.getLogger(__name__)
 
