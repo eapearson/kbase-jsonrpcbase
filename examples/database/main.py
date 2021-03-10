@@ -3,6 +3,15 @@ from jsonrpc11base.service_description import ServiceDescription
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
+class EntryNotFound(errors.APIError):
+    code = 100
+    message = "Entry not found"
+
+    def __init__(self, id):
+        self.error = {
+            'id': id
+        }
+
 # A service does not need to be a class, but it probably will be
 # one if it has state shared between methods.
 class MyService():
@@ -19,7 +28,7 @@ class MyService():
     def get(self, params, options):
         id = params[0]
         if id not in self.db:
-            raise errors.APIError(100, f'Entry not found with id {id}')
+            raise EntryNotFound(id)
         return self.db[id]
 
     def search(self, params, options):

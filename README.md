@@ -4,11 +4,15 @@
 
 This  is a simple JSON-RPC 1.1 library without and agnostic to a transport layer.
 
-It features optional jsonschema validation of method parameters and results.
+It features optional `jsonschema` validation of method parameters and results.
 
 This library is intended as an auxiliary library for relatively easy implementation of JSON-RPC services with Unix/TCP socket
 like transport protocols that do not have complex special requirements. You need to utilize some suitable transport
 protocol with this library to actually provide a working JSON-RPC service.
+
+Please note that "JSON-RPC 1.1" was never finalized as a standard. There were several competing drafts. This implementation is based on the "working draft" of JSON-RPC 1.1. Where incomplete, JSON-RPC 2.0 features are backfilled. This primary affects error codes, which were never finally defined in 1.1.
+
+This library is intended to support older clients using JSON-RPC 1.1 and which need a solid implementation until they can be ported to the more recent and well-defined JSON-RPC 2.0. 
 
 ## Features
 
@@ -76,22 +80,17 @@ This is an implementation of [JSON-RPC 1.1 (working draft)](https://jsonrpc.org/
 
 This spec was never published, and was superseded by [JSON-RPC 2.0](https://www.jsonrpc.org/specification).
 
-The reason for the existence of this library is to support projects which are stuck on 1.1. One of these projects is [KBase](https://www.kbase.us), which has hundreds of dependencies on JSON-RPC 1.1, and therefore needs this support until (and if) it one day migrates to 2.0 or something else.
+The reason for the existence of this library is to support legacy projects which already use 1.1. One of these projects is [KBase](https://www.kbase.us), which has hundreds of dependencies on JSON-RPC 1.1, and therefore needs this support until these usages one day migrates to 2.0 or something else.
 
-However, this library does not buy into, or can simply ignore, aspects of the 1.1 spec.
+As JSON-RPC 1.1 (working draft) was incomplete, this implementation borrows some from JSON-RPC  2.0.
 
-Error codes were specified as an integer between 0 and 999, but the error codes were never assigned. So instead we utilize the [error codes from JSON-RPC 2.0](https://www.jsonrpc.org/specification#error_object).
+### Error Codes
 
-## TODO
-
-- support banning of "system." as method prefix
-- support "system.describe" (see [9. Services](https://jsonrpc.org/historical/json-rpc-1-1-wd.html#Services))
+Error codes were specified in 1.1 as an integer between 0 and 999, but the error codes were never assigned. So instead we utilize the [error codes from JSON-RPC 2.0](https://www.jsonrpc.org/specification#error_object).
 
 ### HTTP
 
-Since this library is transport agnostic, all implications of HTTP usage are ignored.
-
-For instance, [RequestHeaders](https://jsonrpc.org/historical/json-rpc-1-1-wd.html#RequestHeaders) are the domain of the application using this library, not the library itself.
+Since this library is transport agnostic, all implications of HTTP usage are ignored. Specifically, "7.1. HTTP Status Code Requirements" and  "7.2. HTTP Header Requirements" are ignored. (See the [working draft document](https://jsonrpc.org/historical/json-rpc-1-1-wd.html).) 
 
 ## Development
 
@@ -100,6 +99,11 @@ Install [poetry](https://python-poetry.org/) and run `poetry install`.
 Run tests with `make test`.
 
 Deploy with `poetry build` and `poetry publish`.
+
+## TODO
+
+- support banning of "system." as method prefix
+- support "system.describe" (see [9. Services](https://jsonrpc.org/historical/json-rpc-1-1-wd.html#Services))
 
 ## Credits
 

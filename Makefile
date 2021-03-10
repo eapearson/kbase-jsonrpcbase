@@ -1,8 +1,8 @@
 .PHONY: test test-debug publish
 
 test:
-	poetry run flake8 jsonrpc11base test && \
-		poetry run pytest --cov=./jsonrpc11base --cov-report=html test && \
+	poetry run flake8 jsonrpc11base test/specs && \
+		poetry run pytest --cov=./jsonrpc11base --cov-report=html test/specs && \
 		poetry run coverage report
 
 # For running tests while debugging your code; more verbose, inline logging

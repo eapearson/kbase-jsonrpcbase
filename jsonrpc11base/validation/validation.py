@@ -1,5 +1,5 @@
 from .schema import Schema, SchemaError
-from jsonrpc11base.errors import InvalidParamsError, ServerError_InvalidResult
+from jsonrpc11base.errors import InvalidParamsError, InvalidResultServerError
 
 
 class Validation(object):
@@ -11,14 +11,16 @@ class Validation(object):
         schema = self.schema.get(schema_key)
         if schema is None:
             return False
-        return schema.get('schema', False)
+        else:
+            return schema.get('schema', False)
 
     def has_absent_params_validation(self, method_name):
         schema_key = method_name + '.params'
         schema = self.schema.get(schema_key)
         if schema is None:
             return False
-        return schema.get('absent', False)
+        else:
+            return schema.get('absent', False)
 
     def has_result_validation(self, method_name):
         schema_key = method_name + '.result'
@@ -32,14 +34,15 @@ class Validation(object):
         schema = self.schema.get(schema_key)
         if schema is None:
             return False
-        return schema.get('absent', False)
+        else:
+            return schema.get('absent', False)
 
     def validate_params(self, method_name, data):
         schema_key = method_name + '.params'
         try:
             self.schema.validate(schema_key, data)
         except SchemaError as ex:
-            raise InvalidParamsError(data={
+            raise InvalidParamsError(error={
                 'message': ex.message,
                 'path': ex.path,
                 'value': ex.value
@@ -48,8 +51,8 @@ class Validation(object):
     def validate_absent_params(self, method_name):
         schema_key = method_name + '.params'
         if self.schema.validate_absent(schema_key) is not True:
-            raise InvalidParamsError(data={
-                'message': 'Param should not be provided for this method'
+            raise InvalidParamsError(error={
+                'message': 'Params must be provided for this method'
             })
 
     def validate_result(self, method_name, data):
@@ -57,19 +60,8 @@ class Validation(object):
         try:
             self.schema.validate(schema_key, data)
         except SchemaError as ex:
-            raise ServerError_InvalidResult(data={
-                'message': ex.message,
-                'path': ex.path,
-                'value': ex.value
-            })
-
-    def validate_config(self, data):
-        schema_key = 'config'
-        try:
-            self.schema.validate(schema_key, data)
-        except SchemaError as ex:
-            raise InvalidParamsError(data={
-                'message': ex.message,
-                'path': ex.path,
-                'value': ex.value
-            })
+            raise InvalidResultServerError(
+                message=ex.message,
+                path=ex.path,
+                value=ex.value
+            )
